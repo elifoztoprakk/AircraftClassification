@@ -3,15 +3,10 @@ import numpy as np
 import logging
 import warnings
 
-# Suppress the specific warning about compiled metrics
-warnings.filterwarnings('ignore', category=UserWarning, message='Compiled the loaded model, but the compiled metrics have yet to be built.*')
-
-# Suppress TensorFlow logs (optional)
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
-
 class FlyingVehiclePredictor:
-    def __init__(self, model_path):
-         self.model = tf.keras.models.load_model(model_path)
+    def __init__(self, model_path, threshold=0.6):
+        self.model = tf.keras.models.load_model(model_path)
+        self.threshold = threshold
     
     def predict_image(self, image_path):
         img = tf.keras.preprocessing.image.load_img(image_path, target_size=(64, 64))
@@ -19,17 +14,34 @@ class FlyingVehiclePredictor:
         img_array = np.expand_dims(img_array, axis=0) / 255.0
 
         predictions = self.model.predict(img_array)
-        predicted_class = np.argmax(predictions)
+        max_prob = np.max(predictions)
+        predicted_class_idx = np.argmax(predictions)
        
-            
-        return predicted_class
+        if max_prob < self.threshold:
+            predicted_class = 'UNKNOWN'
+            probability = max_prob
+        else:
+            if predicted_class_idx == 0:
+                predicted_class = 'DRONE'
+            elif predicted_class_idx == 1:
+                predicted_class = 'FIGHTER JET'
+            elif predicted_class_idx == 2:
+                predicted_class = 'HELICOPTER'
+            else:
+                predicted_class = 'PASSENGER PLANE'
+            probability = max_prob
+     
+        return predicted_class, probability
 
 # Initialize the predictor with the saved model
-predictor = FlyingVehiclePredictor('flying_vehicles_model.h5')
+predictor = FlyingVehiclePredictor('flying_vehicles_model.h5', threshold=0.6)
 
 # Prompt the user to input the image path
 test_image_path = input("Please enter the path to the image: ")
 
 # Make a prediction
-predicted_class = predictor.predict_image(test_image_path)
-print("Predicted class for the image:", predicted_class)
+predicted_class, probability = predictor.predict_image(test_image_path)
+if predicted_class == 'UNKNOWN':
+    print(f"This image is not an aircraft.")
+else:
+    print(f"Predicted class for the image: {predicted_class} with a probability of {probability*100:.2f}%")
